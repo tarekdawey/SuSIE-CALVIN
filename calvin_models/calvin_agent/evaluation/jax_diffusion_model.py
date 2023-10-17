@@ -1,5 +1,5 @@
-from denoising_diffusion_flax.model import create_sample_fn
-from denoising_diffusion_flax.jax_utils import initialize_compilation_cache
+from susie.model import create_sample_fn
+from susie.jax_utils import initialize_compilation_cache
 import numpy as np
 from PIL import Image
 import os
