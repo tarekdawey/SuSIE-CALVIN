@@ -146,5 +146,3 @@ calvin_venv/*
 dataset/*
 
 experiments
-calvin_models/calvin_agent/evaluation/downloads
-calvin_models/calvin_agent/evaluation/jax-diffusion-model-20000
