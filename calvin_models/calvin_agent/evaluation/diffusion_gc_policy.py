@@ -7,15 +7,12 @@ import numpy as np
 import os
 import orbax.checkpoint
 
-#os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '/nfs/kun2/users/pranav/google-cloud/rail-tpus-98ca38dcbb82.json'
-
 class GCPolicy:
     def __init__(self):
         # We need to first create a dataset object to supply to the agent
         train_paths = [[
-            "/nfs/kun2/users/pranav/calvin_ABCD/tfrecord_datasets/goal_conditioned/training/A/traj0/0.tfrecord",
-            "/nfs/kun2/users/pranav/calvin_ABCD/tfrecord_datasets/goal_conditioned/training/A/traj0/1.tfrecord",
-            "/nfs/kun2/users/pranav/calvin_ABCD/tfrecord_datasets/goal_conditioned/training/A/traj0/2.tfrecord"
+            "mini_dataset/0.tfrecord",
+            "mini_dataset/1.tfrecord"
         ]]
 
         dataset_kwargs = dict(
@@ -38,7 +35,7 @@ class GCPolicy:
                 ],
             ),
             goal_relabeling_strategy="delta_goals",
-            goal_relabeling_kwargs=dict(goal_delta=[0, 70]),
+            goal_relabeling_kwargs=dict(goal_delta=[0, 24]),
             relabel_actions=False,
             act_pred_horizon=4,
             obs_horizon=1,
@@ -169,7 +166,7 @@ class GCPolicy:
         )
 
         print("Loading checkpoint...") 
-        resume_path = "/nfs/kun2/users/pranav/checkpoints/diffusion_policy_checkpoints/gcbc/checkpoint_200000/"
+        resume_path = os.getenv("GC_POLICY_CHECKPOINT")
         restored = orbax.checkpoint.PyTreeCheckpointer().restore(resume_path, item=agent)
         if agent is restored:
             raise FileNotFoundError(f"Cannot load checkpoint from {resume_path}")

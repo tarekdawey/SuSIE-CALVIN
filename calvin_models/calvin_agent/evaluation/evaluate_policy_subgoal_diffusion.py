@@ -43,9 +43,7 @@ from calvin_env.envs.play_table_env import get_env
 logger = logging.getLogger(__name__)
 
 EP_LEN = 360
-NUM_SEQUENCES = 100 #1000
-GPU_IDX = 0
-
+NUM_SEQUENCES = int(os.getenv("NUM_EVAL_SEQUENCES"))
 
 def make_env(dataset_path):
     val_folder = Path(dataset_path) / "validation"
@@ -69,7 +67,7 @@ class CustomModel(CalvinBaseModel):
         #   (2) sequence of image observations as a video
         #   (3) sequence of diffusion model generations also as a video, timed with (2)
         #   (4) sequence of actions as numpy array
-        self.log_dir = "/nfs/kun2/users/pranav/calvin-sim/experiments/diffusion_policy_experiments/gcbc/gpu_" + str(GPU_IDX)
+        self.log_dir = "experiments"
         self.episode_counter = None
         self.language_task = None
         self.obs_image_seq = None
@@ -206,9 +204,6 @@ def evaluate_policy(model, env, epoch=0, eval_log_dir=None, debug=False, create_
 
     results = []
     plans = defaultdict(list)
-
-    # Shard the work between gpus
-    eval_sequences = eval_sequences[20*GPU_IDX : 20*(GPU_IDX+1)]
 
     if not debug:
         eval_sequences = tqdm(eval_sequences, position=0, leave=True)
