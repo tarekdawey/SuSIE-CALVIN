@@ -74,20 +74,26 @@ class CustomModel(CalvinBaseModel):
         self.goal_image_seq = None
         self.action_seq = None
         self.combined_images = None
+        self.previous_obs = None
+
+        self.combined_rgb = []
+        self.obs_pairs = []
 
         # Other necessary variables for running rollouts
         self.goal_image = None
         self.subgoal_counter = 0
+        self.action_counter = 0
         self.subgoal_max = 20
         self.pbar = None
 
     def reset(self):
-        if self.episode_counter is None: # this is the first time reset has been called
+        if self.episode_counter is None:  # this is the first time reset has been called
             self.episode_counter = 0
             self.obs_image_seq = []
             self.goal_image_seq = []
             self.action_seq = []
             self.combined_images = []
+            self.obs_pairs = []
         else:
             episode_log_dir = os.path.join(self.log_dir, "ep" + str(self.episode_counter))
             if not os.path.exists(episode_log_dir):
@@ -96,10 +102,11 @@ class CustomModel(CalvinBaseModel):
             # Log the language task
             with open(os.path.join(episode_log_dir, "language_task.txt"), "w") as f:
                 f.write(self.language_task)
-            
+
             # Log the observation video
             size = (200, 200)
-            out = cv2.VideoWriter(os.path.join(episode_log_dir, "trajectory.mp4"), cv2.VideoWriter_fourcc(*'DIVX'), 15, size)
+            out = cv2.VideoWriter(os.path.join(episode_log_dir, "trajectory.mp4"), cv2.VideoWriter_fourcc(*'DIVX'), 15,
+                                  size)
             for i in range(len(self.obs_image_seq)):
                 rgb_img = cv2.cvtColor(self.obs_image_seq[i], cv2.COLOR_RGB2BGR)
                 out.write(rgb_img)
@@ -115,9 +122,28 @@ class CustomModel(CalvinBaseModel):
 
             # Log the combined image
             size = (400, 200)
-            out = cv2.VideoWriter(os.path.join(episode_log_dir, "combined.mp4"), cv2.VideoWriter_fourcc(*'DIVX'), 15, size)
+            out = cv2.VideoWriter(os.path.join(episode_log_dir, "combined.mp4"), cv2.VideoWriter_fourcc(*'DIVX'), 15,
+                                  size)
             for i in range(len(self.combined_images)):
                 rgb_img = cv2.cvtColor(self.combined_images[i], cv2.COLOR_RGB2BGR)
+                out.write(rgb_img)
+            out.release()
+
+            # Log the visualization
+            size = (600, 200)  # Update the size as needed
+            out = cv2.VideoWriter(os.path.join(episode_log_dir, "obs_pairs.mp4"), cv2.VideoWriter_fourcc(*'DIVX'),
+                                  15, size)
+            for obs_pair in self.obs_pairs:
+                rgb_img = cv2.cvtColor(obs_pair, cv2.COLOR_BGR2RGB)
+                out.write(rgb_img)
+            out.release()
+
+            # Log the combined rgb
+            size = (400, 200)
+            out = cv2.VideoWriter(os.path.join(episode_log_dir, "rgb.mp4"), cv2.VideoWriter_fourcc(*'DIVX'),
+                                  15, size)
+            for i in range(len(self.combined_rgb)):
+                rgb_img = cv2.cvtColor(self.combined_rgb[i], cv2.COLOR_RGB2BGR)
                 out.write(rgb_img)
             out.release()
 
@@ -133,6 +159,10 @@ class CustomModel(CalvinBaseModel):
             self.combined_images = []
             self.subgoal_counter = 0
 
+            self.previous_obs = None
+            self.combined_rgb = []
+            self.obs_pairs = []
+
             # Reset the GC policy
             self.gc_policy.reset()
 
@@ -140,6 +170,7 @@ class CustomModel(CalvinBaseModel):
         if self.pbar is not None:
             self.pbar.close()
         self.pbar = tqdm(total=EP_LEN)
+
 
     def step(self, obs, goal):
         """
@@ -150,6 +181,9 @@ class CustomModel(CalvinBaseModel):
             action: predicted action
         """
         rgb_obs = obs["rgb_obs"]["rgb_static"]
+        rgb_gripper = obs["rgb_obs"]["rgb_gripper"]
+        rgb_gripper_resized = cv2.resize(rgb_gripper, (200, 200))
+
         self.language_task = goal
 
         # If we need to, generate a new goal image
@@ -159,15 +193,26 @@ class CustomModel(CalvinBaseModel):
 
         # Log the image observation and the goal image
         self.obs_image_seq.append(rgb_obs)
+
         self.goal_image_seq.append(self.goal_image)
         self.combined_images.append(np.concatenate([rgb_obs, self.goal_image], axis=1))
-        assert self.combined_images[-1].shape == (200, 400, 3)
+        self.combined_rgb.append(np.concatenate([rgb_obs, rgb_gripper_resized], axis=1))
+        print("Shape of combined_images:", self.combined_images[-1].shape)
+        print("Shape of combined_rgb:", self.combined_rgb[-1].shape)
 
         # Query the behavior cloning model
         action_cmd = self.gc_policy.predict_action(rgb_obs, self.goal_image)
 
         # Log the predicted action
         self.action_seq.append(action_cmd)
+
+        # Save the current observation as a pair with the previous one
+        if self.previous_obs is not None:
+            obs_pair = np.concatenate([self.previous_obs, rgb_obs, self.goal_image], axis=1)
+            self.obs_pairs.append(obs_pair)
+
+        # Update the previous observation
+        self.previous_obs = rgb_obs
 
         # Update variables
         self.subgoal_counter += 1
